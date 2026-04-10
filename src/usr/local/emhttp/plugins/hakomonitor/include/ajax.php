@@ -53,6 +53,7 @@ function loadConfig(): array
         'API_HOST'      => 'http://127.0.0.1:8080',
         'API_KEY'       => '',
         'POLL_INTERVAL' => '5',
+        'DASH'          => 'enable',
     ];
     $saved  = parse_plugin_cfg(PLUGIN_NAME);
     $saved  = is_array($saved) ? $saved : [];
@@ -168,10 +169,13 @@ switch ($action) {
             $pollInterval = 5;
         }
 
+        $dash = postStr('DASH') === 'enable' ? 'enable' : 'disable';
+
         saveConfig([
             'API_HOST'      => $host,
             'API_KEY'       => $apiKey,
             'POLL_INTERVAL' => (string)$pollInterval,
+            'DASH'          => $dash,
         ]);
 
         echo json_encode([

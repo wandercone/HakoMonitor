@@ -16,6 +16,7 @@ $csrfToken = (string)($varIni['csrf_token'] ?? '');
 $apiHost      = (string)($cfg['API_HOST'] ?? 'http://127.0.0.1:8080');
 $apiKey       = (string)($cfg['API_KEY'] ?? '');
 $pollInterval = max(2, min(60, (int)($cfg['POLL_INTERVAL'] ?? 5)));
+$dashEnabled  = ($cfg['DASH'] ?? 'enable') === 'enable';
 ?>
 
 <form id="hmonSettingsForm">
@@ -43,6 +44,13 @@ $pollInterval = max(2, min(60, (int)($cfg['POLL_INTERVAL'] ?? 5)));
   <dd>
     <input type="number" name="POLL_INTERVAL" min="2" max="60" style="width:80px;"
            value="<?= htmlspecialchars((string)$pollInterval); ?>">
+  </dd>
+</dl>
+<dl>
+  <dt>Dashboard Tile</dt>
+  <dd>
+    <input type="checkbox" name="DASH" id="hmonDashToggle" value="enable"<?= $dashEnabled ? ' checked' : ''; ?>>
+    <label for="hmonDashToggle">Show HakoMonitor tile on dashboard</label>
   </dd>
 </dl>
 <dl>
@@ -250,6 +258,7 @@ $pollInterval = max(2, min(60, (int)($cfg['POLL_INTERVAL'] ?? 5)));
         API_HOST:      form.querySelector('[name=API_HOST]').value,
         API_KEY:       form.querySelector('[name=API_KEY]').value,
         POLL_INTERVAL: form.querySelector('[name=POLL_INTERVAL]').value,
+        DASH:          form.querySelector('[name=DASH]').checked ? 'enable' : 'disable',
       });
 
       status.textContent = data.success ? 'Saved.' : ('Error: ' + (data.message || 'Unknown'));

@@ -25,7 +25,7 @@ Search for **HakoMonitor** in the Apps tab and install from there.
 **Via Plugin URL**
 
 1. In the Unraid UI go to **Plugins > Install Plugin**
-2. Paste the `.plg` URL from the [latest release](https://raw.githubusercontent.com/wandercone/HakoMonitor/refs/heads/main/plugin/hakomonitor.plg)
+2. Paste the `.plg` URL from the [latest release](https://raw.githubusercontent.com/wandercone/HakoMonitor/main/plugin/hakomonitor.plg)
 3. Click **Install**
 
 After installation the plugin is available at **Settings > HakoMonitor**.

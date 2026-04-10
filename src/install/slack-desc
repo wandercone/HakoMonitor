@@ -1,12 +1,9 @@
          |-----handy-ruler------------------------------------------------------|
-my-plugin: my-plugin
-my-plugin:
-my-plugin: Sample slack-desc file
-my-plugin:
-my-plugin:
-my-plugin:
-my-plugin:
-my-plugin:
-my-plugin:
-my-plugin: https://github.com/my-user/my-plugin
-my-plugin:
+hakomonitor: hakomonitor
+hakomonitor:
+hakomonitor: Displays fan RPM, PWM, and power wattage from Hako Foundry
+hakomonitor:
+hakomonitor:
+hakomonitor:
+hakomonitor: https://github.com/wandercone/HakoMonitor
+hakomonitor:

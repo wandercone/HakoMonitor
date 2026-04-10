@@ -1,0 +1,93 @@
+Menu="Dashboard:0"
+Cond="(($c=@parse_ini_file('/boot/config/plugins/hakomonitor/hakomonitor.cfg'))===false||($c['DASH']??'enable')==='enable')"
+---
+<?php
+require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
+
+$pluginname   = 'hakomonitor';
+$cfg          = parse_plugin_cfg($pluginname);
+$pollInterval = max(2, min(60, (int)($cfg['POLL_INTERVAL'] ?? 5))) * 1000;
+
+try {
+    $mytiles[$pluginname]['column2'] = <<<EOT
+        <tbody id="tblHmonDash" title="_(HakoMonitor)_">
+        <tr>
+            <td>
+                <span class='tile-header'>
+                <span class='tile-header-left'>
+                    <i class='fa fa-heartbeat f32'></i>
+                    <div class='section'>_(HakoMonitor)_<br><span id="hmon-dash-status"></span><br><br></div>
+                </span>
+                <span class='tile-header-right'>
+                    <span class='tile-header-right-controls'>
+                    <a href='/Dashboard/Settings/HakoMonitor/' title='_(Go to HakoMonitor settings)_'>
+                        <i class='fa fa-fw fa-cog control'></i>
+                    </a>
+                    </span>
+                </span>
+                </span>
+            </td>
+        </tr>
+        <tr class="header"><td><span class="w36">_(Fan Wall)_</span><span class="w18">_(Mode)_</span><span class="w18">_(Override)_</span><span class="w26">_(RPM)_</span></td></tr>
+        </tbody>
+        EOT;
+} catch (\Throwable $t) {
+    error_log((string) $t);
+}
+?>
+
+<script>
+$(function () {
+    hmonLoadDash();
+    setInterval(hmonLoadDash, <?= $pollInterval; ?>);
+});
+
+function hmonLoadDash() {
+    $.getJSON('/plugins/hakomonitor/include/dash.php', function (data) {
+        var statusEl = document.getElementById('hmon-dash-status');
+        var tbody    = $('#tblHmonDash');
+
+        tbody.find('tr.hmon-row').remove();
+
+        if (!data.success) {
+            statusEl.innerHTML = '<font color="red">Disconnected</font>';
+            return;
+        }
+
+        statusEl.innerHTML = '<font color="green">Connected</font>';
+
+        if (data.fans && Array.isArray(data.fans.walls)) {
+            $.each(data.fans.walls, function (i, wall) {
+                var name = wall.name || 'Wall ' + wall.wall_id;
+                var rpm    = wall.rpm != null ? wall.rpm + ' RPM' : '-';
+                var ov     = (data.fans.override_active || wall.override_active) === true;
+                var mode   = wall.manual ? 'Manual' : 'Auto';
+                var ovCell = ov ? '<font color="orange">Active</font>' : '-';
+
+                tbody.append(
+                    '<tr class="hmon-row"><td>' +
+                    '<span class="w36">' + name   + '</span>' +
+                    '<span class="w18">' + mode   + '</span>' +
+                    '<span class="w18">' + ovCell + '</span>' +
+                    '<span class="w26">' + rpm    + '</span>' +
+                    '</td></tr>'
+                );
+            });
+        }
+
+        if (Array.isArray(data.powerboards) && data.powerboards.length > 0) {
+            tbody.append('<tr class="hmon-row header"><td><span class="w36">Board</span><span class="w44">Total Power</span></td></tr>');
+            $.each(data.powerboards, function (i, pb) {
+                if (!pb.is_connected) { return; }
+                var total = pb.power && pb.power.total_watts != null ? pb.power.total_watts + ' W' : '-';
+                tbody.append(
+                    '<tr class="hmon-row"><td>' +
+                    '<span class="w36">Board ' + pb.location + '</span>' +
+                    '<span class="w44">' + total + '</span>' +
+                    '</td></tr>'
+                );
+            });
+        }
+    });
+}
+</script>

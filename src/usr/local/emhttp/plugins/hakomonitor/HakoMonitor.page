@@ -1,0 +1,276 @@
+Menu="Utilities"
+Type="xmenu"
+Title="HakoMonitor"
+Icon="fa-heartbeat"
+Markdown="false"
+---
+<?php
+require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
+
+$pluginName = 'hakomonitor';
+$cfg        = parse_plugin_cfg($pluginName);
+
+$varIni    = parse_ini_file('/var/local/emhttp/var.ini') ?: [];
+$csrfToken = (string)($varIni['csrf_token'] ?? '');
+
+$apiHost      = (string)($cfg['API_HOST'] ?? 'http://127.0.0.1:8080');
+$apiKey       = (string)($cfg['API_KEY'] ?? '');
+$pollInterval = max(2, min(60, (int)($cfg['POLL_INTERVAL'] ?? 5)));
+?>
+
+<form id="hmonSettingsForm">
+<input type="hidden" id="hmonCsrfToken" value="<?= htmlspecialchars($csrfToken); ?>">
+
+<table class="unraid tablesorter"><thead><tr><td>API Settings</td></tr></thead></table>
+<dl>
+  <dt>API Host</dt>
+  <dd>
+    <input type="text" name="API_HOST" style="width:320px;" autocomplete="off" spellcheck="false"
+           placeholder="http://127.0.0.1:8080"
+           value="<?= htmlspecialchars($apiHost); ?>">
+  </dd>
+</dl>
+<dl>
+  <dt>API Key</dt>
+  <dd>
+    <input type="password" name="API_KEY" style="width:320px;" autocomplete="off"
+           placeholder="Enter your X-API-Key"
+           value="<?= htmlspecialchars($apiKey); ?>">
+  </dd>
+</dl>
+<dl>
+  <dt>Poll Interval (s)</dt>
+  <dd>
+    <input type="number" name="POLL_INTERVAL" min="2" max="60" style="width:80px;"
+           value="<?= htmlspecialchars((string)$pollInterval); ?>">
+  </dd>
+</dl>
+<dl>
+  <dt>&nbsp;</dt>
+  <dd>
+    <input type="button" id="hmonSaveBtn" value="Save Settings" onclick="hmonSaveSettings()">
+    <span id="hmonSaveStatus" style="margin-left:10px;"></span>
+  </dd>
+</dl>
+</form>
+
+<table class="unraid tablesorter"><thead><tr><td>Service</td></tr></thead></table>
+<dl>
+  <dt>Connection</dt>
+  <dd><span id="hmonServiceStatus">Connecting...</span></dd>
+</dl>
+<dl>
+  <dt>Powerboards</dt>
+  <dd><span id="hmonPowerboardCount">-</span></dd>
+</dl>
+
+<div id="hmonFanContainer">
+  <dl><dt>&nbsp;</dt><dd><em>Loading...</em></dd></dl>
+</div>
+
+<div id="hmonPowerContainer">
+  <dl><dt>&nbsp;</dt><dd><em>Loading...</em></dd></dl>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let pollTimer      = null;
+  let pollIntervalMs = <?= $pollInterval * 1000; ?>;
+
+  function csrf() {
+    try { if (parent.csrf_token) return parent.csrf_token; } catch (e) {}
+    return document.getElementById('hmonCsrfToken').value;
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function post(params) {
+    const resp = await fetch('/plugins/hakomonitor/include/ajax.php', {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-TOKEN':  csrf(),
+      },
+      body: new URLSearchParams(Object.assign({ csrf_token: csrf() }, params)),
+    });
+    if (resp.status === 403) throw new Error('Session expired...please refresh the page.');
+    if (!resp.ok)            throw new Error('Server error ' + resp.status);
+    return resp.json();
+  }
+
+  async function fetchStatus() {
+    try {
+      const data = await post({ action: 'fetch_status' });
+      renderStatus(data);
+    } catch (e) {
+      const el = document.getElementById('hmonServiceStatus');
+      el.textContent = 'Error: ' + e.message;
+      el.style.color = 'var(--red, #ef5350)';
+    }
+  }
+
+  function renderStatus(data) {
+    const statusEl = document.getElementById('hmonServiceStatus');
+    const pbCount  = document.getElementById('hmonPowerboardCount');
+
+    if (!data.success) {
+      statusEl.textContent = data.message || 'Unknown error';
+      statusEl.style.color = 'var(--red, #ef5350)';
+      document.getElementById('hmonFanContainer').innerHTML   = '<dl><dt>&nbsp;</dt><dd><em>No data.</em></dd></dl>';
+      document.getElementById('hmonPowerContainer').innerHTML = '<dl><dt>&nbsp;</dt><dd><em>No data.</em></dd></dl>';
+      return;
+    }
+
+    const svc = data.service || {};
+    if (svc.status === 'ok') {
+      statusEl.textContent = 'Connected';
+      statusEl.style.color = 'var(--green, #4caf50)';
+    } else {
+      statusEl.textContent = svc.status || 'Unknown';
+      statusEl.style.color = 'var(--orange, #ff9800)';
+    }
+
+    pbCount.textContent = svc.powerboards_connected != null
+      ? String(svc.powerboards_connected)
+      : '-';
+
+    renderFans(data.fans   || null);
+    renderPower(data.powerboards || null);
+  }
+
+  function renderFans(fans) {
+    const container = document.getElementById('hmonFanContainer');
+
+    if (!fans || !Array.isArray(fans.walls) || fans.walls.length === 0) {
+      container.innerHTML = '<dl><dt>&nbsp;</dt><dd><em>No fan data available.</em></dd></dl>';
+      return;
+    }
+
+    const globalOverride = fans.override_active === true;
+
+    let html = '<table class="unraid tablesorter" style="width:100%;">'
+      + '<thead><tr><td colspan="6">Fan Walls</td></tr><tr>'
+      + '<td>Wall</td>'
+      + '<td>Profile</td>'
+      + '<td>Mode</td>'
+      + '<td>Override</td>'
+      + '<td style="text-align:right;">PWM %</td>'
+      + '<td style="text-align:right;">RPM</td>'
+      + '</tr></thead><tbody>';
+
+    for (const wall of fans.walls) {
+      const name     = esc(wall.name || ('Wall ' + wall.wall_id));
+      const profile  = esc(wall.assigned_profile || '-');
+      const pwm      = wall.pwm_percent != null ? esc(String(wall.pwm_percent)) + '%' : '-';
+      const rpm      = wall.rpm         != null ? esc(String(wall.rpm)) + ' RPM'      : '-';
+      const mode     = wall.manual === true ? 'Manual' : 'Auto';
+      const ov       = globalOverride || wall.override_active === true;
+      const ovCell   = ov ? '<span style="color:var(--orange,#ff9800);">Active</span>' : '-';
+
+      html += `<tr>
+        <td>${name}</td>
+        <td>${profile}</td>
+        <td>${mode}</td>
+        <td>${ovCell}</td>
+        <td style="text-align:right;">${pwm}</td>
+        <td style="text-align:right;">${rpm}</td>
+      </tr>`;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  function renderPower(powerboards) {
+    const container = document.getElementById('hmonPowerContainer');
+
+    if (!Array.isArray(powerboards) || powerboards.length === 0) {
+      container.innerHTML = '<dl><dt>&nbsp;</dt><dd><em>No power data available.</em></dd></dl>';
+      return;
+    }
+
+    let html = '<table class="unraid tablesorter" style="width:100%;">'
+      + '<thead><tr><td colspan="8">Power</td></tr><tr>'
+      + '<td>Board</td>'
+      + '<td style="text-align:right;">Shunt 1</td>'
+      + '<td style="text-align:right;">Shunt 2</td>'
+      + '<td style="text-align:right;">Shunt 3</td>'
+      + '<td style="text-align:right;">Shunt 4</td>'
+      + '<td style="text-align:right;">Sec 1+2</td>'
+      + '<td style="text-align:right;">Sec 3+4</td>'
+      + '<td style="text-align:right;"><strong>Total</strong></td>'
+      + '</tr></thead><tbody>';
+
+    for (const pb of powerboards) {
+      if (!pb.is_connected) {
+        html += `<tr>
+          <td>Board ${esc(String(pb.location))}</td>
+          <td colspan="7" style="color:var(--grey,#888);">Not connected</td>
+        </tr>`;
+        continue;
+      }
+
+      const pwr  = pb.power || {};
+      const fmt  = (v) => v != null ? esc(String(v)) + ' W' : '-';
+
+      html += `<tr>
+        <td>Board ${esc(String(pb.location))}</td>
+        <td style="text-align:right;">${fmt(pwr.shunt1_watts)}</td>
+        <td style="text-align:right;">${fmt(pwr.shunt2_watts)}</td>
+        <td style="text-align:right;">${fmt(pwr.shunt3_watts)}</td>
+        <td style="text-align:right;">${fmt(pwr.shunt4_watts)}</td>
+        <td style="text-align:right;">${fmt(pwr.section_1_2_watts)}</td>
+        <td style="text-align:right;">${fmt(pwr.section_3_4_watts)}</td>
+        <td style="text-align:right;"><strong>${fmt(pwr.total_watts)}</strong></td>
+      </tr>`;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  window.hmonSaveSettings = async function () {
+    const btn    = document.getElementById('hmonSaveBtn');
+    const form   = document.getElementById('hmonSettingsForm');
+    const status = document.getElementById('hmonSaveStatus');
+
+    btn.disabled = true;
+
+    try {
+      const data = await post({
+        action:        'save_config',
+        API_HOST:      form.querySelector('[name=API_HOST]').value,
+        API_KEY:       form.querySelector('[name=API_KEY]').value,
+        POLL_INTERVAL: form.querySelector('[name=POLL_INTERVAL]').value,
+      });
+
+      status.textContent = data.success ? 'Saved.' : ('Error: ' + (data.message || 'Unknown'));
+      status.style.color = data.success ? 'var(--green,#4caf50)' : 'var(--red,#ef5350)';
+
+      if (data.success && data.poll_interval) {
+        pollIntervalMs = data.poll_interval * 1000;
+        clearInterval(pollTimer);
+        pollTimer = setInterval(fetchStatus, pollIntervalMs);
+        fetchStatus();
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      }
+    } catch (e) {
+      status.textContent = 'Error: ' + e.message;
+      status.style.color = 'var(--red,#ef5350)';
+    }
+
+    btn.disabled = false;
+  };
+
+  fetchStatus();
+  pollTimer = setInterval(fetchStatus, pollIntervalMs);
+}());
+</script>

@@ -2,7 +2,7 @@
   "name": "hakomonitor",
   "package_name": "unraid-hakomonitor",
   "author": "wandercone",
-  "support": "https://REMOVED",
+  "support": "https://forums.unraid.net/topic/198214-plugin-hakomonitor/",
   "launch": "Settings/HakoMonitor",
-  "icon": "server"
+  "icon": "heartbeat"
 }

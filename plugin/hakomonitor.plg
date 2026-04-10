@@ -1,0 +1,72 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN>
+
+<PLUGIN 
+  name="hakomonitor"
+  author="wandercone"
+  version="2026.04.10.01"
+  launch="Settings/HakoMonitor"
+  pluginURL="https://raw.githubusercontent.com/wandercone/HakoMonitor/main/plugin/hakomonitor.plg"
+  support="https://forums.unraid.net/topic/198214-plugin-hakomonitor/"
+  
+  
+  icon="heartbeat"
+>
+
+<CHANGES>
+<![CDATA[
+
+### 2026.04.10.01
+
+- chore: fix plugin.json values
+
+### 2026.04.10
+
+feat: initial upload
+
+
+For older releases, see https://github.com/wandercone/HakoMonitor/releases
+]]>
+</CHANGES>
+
+<FILE Name="/boot/config/plugins/hakomonitor/unraid-hakomonitor-2026.04.10.01-noarch-1.txz">
+<URL>https://github.com/wandercone/HakoMonitor/releases/download/2026.04.10.01/unraid-hakomonitor-2026.04.10.01-noarch-1.txz</URL>
+<SHA256>9d044f1c21f289ff03bfcdab9994cd3ec2f22df17f81c2eaa9c82a1abaa1bbc8</SHA256>
+</FILE>
+
+<!--
+The 'install' script.
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+upgradepkg --install-new /boot/config/plugins/hakomonitor/unraid-hakomonitor-2026.04.10.01-noarch-1.txz
+
+# cleanup old versions
+rm -f $(ls /boot/config/plugins/hakomonitor/unraid-hakomonitor-*.txz 2>/dev/null | grep -v '2026.04.10.01')
+
+echo ""
+echo "----------------------------------------------------"
+echo " hakomonitor has been installed."
+echo " Version: 2026.04.10.01"
+echo "----------------------------------------------------"
+echo ""
+]]>
+</INLINE>
+</FILE>
+
+<!--
+The 'remove' script.
+-->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+<![CDATA[
+removepkg unraid-hakomonitor
+
+rm -rf /usr/local/emhttp/plugins/hakomonitor
+rm -rf /boot/config/plugins/hakomonitor
+]]>
+</INLINE>
+</FILE>
+
+</PLUGIN>

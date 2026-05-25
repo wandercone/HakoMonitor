@@ -22,24 +22,6 @@ function jsonResponse(bool $success, string $message): never
     exit;
 }
 
-$csrfPost   = $_POST['csrf_token']          ?? '';
-$csrfHeader = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-$csrfCookie = $_COOKIE['csrf_token']        ?? '';
-
-$csrfToken = $csrfHeader !== '' ? $csrfHeader : $csrfPost;
-
-if ($csrfToken === '') {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'CSRF token invalid.']);
-    exit;
-}
-
-if ($csrfCookie !== '' && $csrfToken !== $csrfCookie) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'CSRF token invalid.']);
-    exit;
-}
-
 const PLUGIN_NAME = 'hakomonitor';
 const CFG_DIR     = '/boot/config/plugins/hakomonitor';
 const CFG_FILE    = CFG_DIR . '/hakomonitor.cfg';

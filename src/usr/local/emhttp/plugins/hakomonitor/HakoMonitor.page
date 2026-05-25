@@ -10,9 +10,6 @@ require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
 $pluginName = 'hakomonitor';
 $cfg        = parse_plugin_cfg($pluginName);
 
-$varIni    = parse_ini_file('/var/local/emhttp/var.ini') ?: [];
-$csrfToken = (string)($varIni['csrf_token'] ?? '');
-
 $apiHost      = (string)($cfg['API_HOST'] ?? 'http://127.0.0.1:8080');
 $apiKey       = (string)($cfg['API_KEY'] ?? '');
 $pollInterval = max(2, min(60, (int)($cfg['POLL_INTERVAL'] ?? 5)));
@@ -20,8 +17,6 @@ $dashEnabled  = ($cfg['DASH'] ?? 'enable') === 'enable';
 ?>
 
 <form id="hmonSettingsForm">
-<input type="hidden" id="hmonCsrfToken" value="<?= htmlspecialchars($csrfToken); ?>">
-
 <table class="unraid tablesorter"><thead><tr><td>API Settings</td></tr></thead></table>
 <dl>
   <dt>API Host</dt>
@@ -87,11 +82,6 @@ $dashEnabled  = ($cfg['DASH'] ?? 'enable') === 'enable';
   let pollTimer      = null;
   let pollIntervalMs = <?= $pollInterval * 1000; ?>;
 
-  function csrf() {
-    try { if (parent.csrf_token) return parent.csrf_token; } catch (e) {}
-    return document.getElementById('hmonCsrfToken').value;
-  }
-
   function esc(str) {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -105,12 +95,10 @@ $dashEnabled  = ($cfg['DASH'] ?? 'enable') === 'enable';
       method:  'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRF-TOKEN':  csrf(),
       },
-      body: new URLSearchParams(Object.assign({ csrf_token: csrf() }, params)),
+      body: new URLSearchParams(params),
     });
-    if (resp.status === 403) throw new Error('Session expired...please refresh the page.');
-    if (!resp.ok)            throw new Error('Server error ' + resp.status);
+    if (!resp.ok) throw new Error('Server error ' + resp.status);
     return resp.json();
   }
 

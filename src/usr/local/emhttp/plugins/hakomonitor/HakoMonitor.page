@@ -9,6 +9,7 @@ require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
 
 $pluginName = 'hakomonitor';
 $cfg        = parse_plugin_cfg($pluginName);
+$varIni     = parse_ini_file('/var/local/emhttp/var.ini') ?: [];
 
 $apiHost      = (string)($cfg['API_HOST'] ?? 'http://127.0.0.1:8080');
 $apiKey       = (string)($cfg['API_KEY'] ?? '');
@@ -79,6 +80,7 @@ $dashEnabled  = ($cfg['DASH'] ?? 'enable') === 'enable';
 (function () {
   'use strict';
 
+  const CSRF_TOKEN = <?= json_encode($varIni['csrf_token'] ?? ''); ?>;
   let pollTimer      = null;
   let pollIntervalMs = <?= $pollInterval * 1000; ?>;
 
@@ -96,10 +98,16 @@ $dashEnabled  = ($cfg['DASH'] ?? 'enable') === 'enable';
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams(params),
+      body: new URLSearchParams({ csrf_token: CSRF_TOKEN, ...params }),
     });
     if (!resp.ok) throw new Error('Server error ' + resp.status);
-    return resp.json();
+    const text = await resp.text();
+    if (!text) throw new Error('Empty response from server.');
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('Invalid response from server.');
+    }
   }
 
   async function fetchStatus() {
